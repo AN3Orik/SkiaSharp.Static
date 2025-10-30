@@ -8,12 +8,30 @@ param(
 
 Write-Host "Creating stdcall wrapper for $LibPath"
 
-# Extract all hb_* public symbols
-$symbols = & dumpbin /SYMBOLS $LibPath | Select-String "External.*\s_hb_\w+" | ForEach-Object {
-    if ($_ -match "External.*\s(_hb_\w+)") { $matches[1] }
-} | Sort-Object -Unique
+# Debug: show first few lines of dumpbin output
+Write-Host "`nDumpbin symbol sample:"
+& dumpbin /SYMBOLS $LibPath | Select-Object -First 30 | ForEach-Object { Write-Host $_ }
 
-Write-Host "Found $($symbols.Count) HarfBuzz symbols to wrap"
+# Extract all hb_* public symbols (look for both External and public symbols)
+$symbols = & dumpbin /SYMBOLS $LibPath | Select-String "\s_hb_\w+" | ForEach-Object {
+    if ($_ -match "\s(_hb_\w+)\s*\|") { $matches[1] }
+    elseif ($_ -match "External.*\s(_hb_\w+)") { $matches[1] }
+} | Where-Object { $_ } | Sort-Object -Unique
+
+Write-Host "`nFound $($symbols.Count) HarfBuzz symbols to wrap"
+
+if ($symbols.Count -eq 0) {
+    Write-Error "No HarfBuzz symbols found in library!"
+    Write-Host "Trying alternative pattern..."
+    # Try simpler pattern
+    $symbols = & dumpbin /SYMBOLS $LibPath | Select-String "hb_" | ForEach-Object {
+        if ($_ -match "(\w+hb_\w+)") { 
+            Write-Host "Match: $_"
+            $matches[1] 
+        }
+    } | Where-Object { $_ -and $_.StartsWith("_hb_") } | Sort-Object -Unique
+    Write-Host "Found $($symbols.Count) symbols with alternative pattern"
+}
 
 # Generate wrapper assembly file (simpler than C with jmp)
 $asmContent = "; Auto-generated stdcall wrappers for HarfBuzz x86`n"

@@ -97,4 +97,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Stdcall wrapper created: $wrapperLibPath"
-return $wrapperLibPath
+Write-Output $wrapperLibPath

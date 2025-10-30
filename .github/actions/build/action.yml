@@ -77,6 +77,29 @@ runs:
         $arch = "${{ inputs.arch }}"
         $platform = if ($arch -eq "x86") { "Win32" } else { "x64" }
 
+        # For x86, we need stdcall exports but cdecl callbacks
+        # Patch HarfBuzz headers to explicitly mark callback types as __cdecl
+        if ($arch -eq "x86") {
+            Write-Host "Patching HarfBuzz headers for x86 stdcall build with cdecl callbacks"
+            
+            $hbCommonPath = "../../../externals/skia/third_party/externals/harfbuzz/src/hb-common.h"
+            if (Test-Path $hbCommonPath) {
+                $content = Get-Content $hbCommonPath -Raw
+                # Add __cdecl to hb_destroy_func_t typedef
+                $content = $content -replace '(typedef\s+void\s+\()\s*(\*\s*hb_destroy_func_t\s*\))', '$1__cdecl $2'
+                # Add __cdecl to hb_user_data_key_t callback if present
+                $content = $content -replace '(typedef\s+void\s+\()\s*(\*\s*hb_[a-z_]*_func_t\s*\))', '$1__cdecl $2'
+                Set-Content $hbCommonPath -Value $content -NoNewline
+                Write-Host "Patched $hbCommonPath to use __cdecl for callback typedefs"
+            }
+
+            # Create Directory.Build.props to set CallingConvention=StdCall for exports
+            $propsPath = Join-Path -Path (Get-Location) -ChildPath "Directory.Build.props"
+            $xml = "<Project>`n  <ItemDefinitionGroup Condition=`"'`$(Configuration)|`$(Platform)'=='Release|Win32'`">`n    <ClCompile>`n      <CallingConvention>StdCall</CallingConvention>`n    </ClCompile>`n  </ItemDefinitionGroup>`n</Project>"
+            Set-Content -Path $propsPath -Value $xml -NoNewline -Encoding UTF8
+            Write-Host "Created $propsPath to set CallingConvention=StdCall (/Gz) for Release|Win32"
+        }
+
         $msbuildProps = @(
             "Configuration=Release"
             "Platform=$platform"
@@ -86,21 +109,19 @@ runs:
             "OutDir=$env:BuildDir"
         ) -join ";"
 
-        # Build HarfBuzz with default calling convention (cdecl)
         msbuild -m -t:rebuild "-p:$msbuildProps" -v:n
 
-        # For x86, HarfBuzz is built with cdecl, but Skia expects stdcall
-        # We need to create a wrapper lib that provides stdcall symbols
+        # Verify the lib has stdcall symbols for x86
         if ($arch -eq "x86") {
-            Write-Host "`n=== Creating stdcall wrapper for x86 ==="
-            
-            # The wrapper will be created by extracting objects and re-linking with /Gz
-            # But that's complex. Instead, let's verify what we have and document the issue.
+            Write-Host "`n=== Verifying libHarfBuzzSharp.lib calling convention ==="
             $libPath = Join-Path -Path $env:BuildDir -ChildPath "libHarfBuzzSharp.lib"
             if (Test-Path $libPath) {
-                Write-Host "libHarfBuzzSharp.lib built successfully with cdecl"
-                Write-Host "Note: For x86 Native AOT, stdcall wrappers are needed"
-                Write-Host "The lib will be packaged as-is for now"
+                & dumpbin /SYMBOLS $libPath | Select-String "hb_blob_create" | Select-Object -First 3 | ForEach-Object {
+                    Write-Host $_.Line
+                }
+                Write-Host "Expected: _hb_blob_create@20 (stdcall) for x86"
+            } else {
+                Write-Warning "libHarfBuzzSharp.lib not found at $libPath"
             }
         }
 

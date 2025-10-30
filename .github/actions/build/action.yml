@@ -86,12 +86,13 @@ runs:
             "OutDir=$env:BuildDir"
         ) -join ";"
 
-        # For x86, create a Directory.Build.props file to force /Gz for Release|Win32
+        # For x86, create a Directory.Build.props file to force /Gz (stdcall) for Release|Win32
+        # We must override CallingConvention property to replace /Gd with /Gz
         if ($arch -eq "x86") {
             $propsPath = Join-Path -Path (Get-Location) -ChildPath "Directory.Build.props"
-            $xml = "<Project>`n  <ItemDefinitionGroup Condition=`"'`$(Configuration)|`$(Platform)'=='Release|Win32'`">`n    <ClCompile>`n      <AdditionalOptions>/Gz %(AdditionalOptions)</AdditionalOptions>`n    </ClCompile>`n  </ItemDefinitionGroup>`n</Project>"
+            $xml = "<Project>`n  <ItemDefinitionGroup Condition=`"'`$(Configuration)|`$(Platform)'=='Release|Win32'`">`n    <ClCompile>`n      <CallingConvention>StdCall</CallingConvention>`n    </ClCompile>`n  </ItemDefinitionGroup>`n</Project>"
             Set-Content -Path $propsPath -Value $xml -NoNewline -Encoding UTF8
-            Write-Host "Created $propsPath to force /Gz for Release|Win32"
+            Write-Host "Created $propsPath to set CallingConvention=StdCall (/Gz) for Release|Win32"
         }
 
         msbuild -m -t:rebuild "-p:$msbuildProps" -v:n

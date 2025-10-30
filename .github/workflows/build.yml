@@ -6,6 +6,7 @@ on:
       - ".github/actions/**"
       - "args.gn"
       - "args_x86.gn"
+      - "create-stdcall-wrapper.ps1"
 defaults:
   run:
     shell: nu {0}

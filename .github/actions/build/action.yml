@@ -91,11 +91,17 @@ runs:
         if ($arch -eq "x86") {
             Write-Host "`n=== Creating stdcall wrapper for x86 Native AOT ==="
             $libPath = Join-Path $env:BuildDir "libHarfBuzzSharp.lib"
-            $wrapperLib = & "$env:GITHUB_WORKSPACE\create-stdcall-wrapper.ps1" -LibPath $libPath -OutputDir $env:BuildDir
-            if ($wrapperLib) {
+            & "$env:GITHUB_WORKSPACE\create-stdcall-wrapper.ps1" -LibPath $libPath -OutputDir $env:BuildDir
+            
+            # The script creates libHarfBuzzSharp_stdcall.lib
+            $wrapperLib = Join-Path $env:BuildDir "libHarfBuzzSharp_stdcall.lib"
+            if (Test-Path $wrapperLib) {
                 Copy-Item -Path $wrapperLib -Destination $libPath -Force
                 Write-Host "Replaced with stdcall wrapper version"
                 & dumpbin /SYMBOLS $libPath | Select-String "hb_blob_create@" | Select-Object -First 2
+            } else {
+                Write-Error "Wrapper library not created"
+                exit 1
             }
         }
 

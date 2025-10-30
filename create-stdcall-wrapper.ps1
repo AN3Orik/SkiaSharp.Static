@@ -103,4 +103,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Stdcall wrapper created: $wrapperLibPath"
-Write-Output $wrapperLibPath
+
+# Return the path to the combined library (this will be captured by caller)
+$wrapperLibPath

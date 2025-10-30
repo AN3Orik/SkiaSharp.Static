@@ -40,7 +40,14 @@ jobs:
           arch: ${{ matrix.arch }}
       - name: Install LLVM 21
         shell: pwsh
-        run: winget install --id LLVM.LLVM --accept-package-agreements --accept-source-agreements --disable-interactivity
+        run: |
+          try {
+            choco install llvm --version=21.1.0 -y
+          } catch {
+            Write-Host "Chocolatey install failed, trying winget..."
+            $env:PATH += ";C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps"
+            winget install --id LLVM.LLVM --accept-package-agreements --accept-source-agreements --disable-interactivity
+          }
       - uses: ./.github/actions/build
         with:
           arch: ${{ matrix.arch }}

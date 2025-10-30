@@ -34,10 +34,13 @@ runs:
             $"TargetArch=($arch)"
         ] | str join (char newline) | save --append $env.GITHUB_ENV
         
-        echo "" | save --append $env.GITHUB_ENV  # Add newline separator
+        # Add newline separator to prevent variable concatenation
+        "" | save --append $env.GITHUB_ENV
         
         # Set additional environment variables for native compilation
         if ($arch == "x86") {
+            # Add newline before x86 specific variables
+            "" | save --append $env.GITHUB_ENV
             [
                 "CC_target=clang-cl"
                 "CXX_target=clang-cl" 
@@ -49,6 +52,8 @@ runs:
                 "VSCMD_ARG_TGT_ARCH=x86"
             ] | str join (char newline) | save --append $env.GITHUB_ENV
         } else {
+            # Add newline before x64 specific variables
+            "" | save --append $env.GITHUB_ENV
             [
                 "VSCMD_ARG_HOST_ARCH=x64"
                 "VSCMD_ARG_TGT_ARCH=x64"

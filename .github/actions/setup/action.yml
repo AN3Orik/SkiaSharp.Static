@@ -34,6 +34,8 @@ runs:
             $"TargetArch=($arch)"
         ] | str join (char newline) | save --append $env.GITHUB_ENV
         
+        echo "" | save --append $env.GITHUB_ENV  # Add newline separator
+        
         # Set additional environment variables for native compilation
         if ($arch == "x86") {
             [

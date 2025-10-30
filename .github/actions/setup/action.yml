@@ -23,6 +23,13 @@ runs:
     - name: Setup depot tools
       uses: 2ndlab/actions/setup-depot-tools@main
 
+    - name: Reset depot_tools changes
+      shell: pwsh
+      run: |
+        cd depot_tools
+        git reset --hard HEAD
+        git clean -fd
+
     - name: Setup PATH and ENV
       shell: nu {0}
       run: |

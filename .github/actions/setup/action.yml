@@ -12,9 +12,10 @@ runs:
       with:
         version: "*"
 
-    - uses: TheMrMilchmann/setup-msvc-dev@v3
+    - name: Setup MSVC Environment
+      uses: ilammy/msvc-dev-cmd@v1
       with:
-        arch: ${{ inputs.arch }}
+        arch: ${{ inputs.arch == 'x86' && 'x86' || 'x64' }}
 
     - name: Install uv
       uses: astral-sh/setup-uv@v6
@@ -40,5 +41,14 @@ runs:
                 "CXX_target=clang-cl" 
                 "AR_target=llvm-lib"
                 "target_cpu=x86"
+                "PROCESSOR_ARCHITECTURE=x86"
+                "PROCESSOR_ARCHITEW6432="
+                "VSCMD_ARG_HOST_ARCH=x86"
+                "VSCMD_ARG_TGT_ARCH=x86"
+            ] | str join (char newline) | save --append $env.GITHUB_ENV
+        } else {
+            [
+                "VSCMD_ARG_HOST_ARCH=x64"
+                "VSCMD_ARG_TGT_ARCH=x64"
             ] | str join (char newline) | save --append $env.GITHUB_ENV
         }

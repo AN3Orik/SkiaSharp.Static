@@ -14,7 +14,7 @@ env:
   SkiaSharpVersion: 3.119.0
 jobs:
   build:
-    runs-on: windows-2025
+    runs-on: windows-2022
     permissions:
       id-token: write
       attestations: write
@@ -24,6 +24,17 @@ jobs:
         arch: [x64, x86]
     steps:
       - uses: actions/checkout@v4
+      - name: Set Architecture Environment
+        shell: pwsh
+        run: |
+          if ("${{ matrix.arch }}" -eq "x86") {
+            echo "VSCMD_ARG_HOST_ARCH=x86" >> $env:GITHUB_ENV
+            echo "VSCMD_ARG_TGT_ARCH=x86" >> $env:GITHUB_ENV
+            echo "PROCESSOR_ARCHITECTURE=x86" >> $env:GITHUB_ENV
+          } else {
+            echo "VSCMD_ARG_HOST_ARCH=x64" >> $env:GITHUB_ENV
+            echo "VSCMD_ARG_TGT_ARCH=x64" >> $env:GITHUB_ENV
+          }
       - uses: ./.github/actions/setup
         with:
           arch: ${{ matrix.arch }}

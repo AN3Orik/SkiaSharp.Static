@@ -8,42 +8,63 @@ param(
 
 Write-Host "Creating stdcall wrapper for $LibPath"
 
-# Debug: show first few lines of dumpbin output
-Write-Host "`nDumpbin symbol sample:"
-& dumpbin /SYMBOLS $LibPath | Select-Object -First 30 | ForEach-Object { Write-Host $_ }
+# For LTCG libs, symbols aren't readable via /SYMBOLS
+# Instead, list all hb_* functions we need based on error list from Native AOT
+Write-Host "Using predefined HarfBuzz function list for x86 Native AOT"
 
-# Extract all hb_* public symbols (look for both External and public symbols)
-$symbols = & dumpbin /SYMBOLS $LibPath | Select-String "\s_hb_\w+" | ForEach-Object {
-    if ($_ -match "\s(_hb_\w+)\s*\|") { $matches[1] }
-    elseif ($_ -match "External.*\s(_hb_\w+)") { $matches[1] }
-} | Where-Object { $_ } | Sort-Object -Unique
+$symbols = @(
+    "_hb_blob_create",
+    "_hb_blob_destroy",
+    "_hb_buffer_add_utf16",
+    "_hb_buffer_create",
+    "_hb_buffer_destroy",
+    "_hb_buffer_get_content_type",
+    "_hb_buffer_get_direction",
+    "_hb_buffer_get_glyph_infos",
+    "_hb_buffer_get_glyph_positions",
+    "_hb_buffer_get_length",
+    "_hb_buffer_guess_segment_properties",
+    "_hb_buffer_reset",
+    "_hb_buffer_reverse",
+    "_hb_buffer_set_direction",
+    "_hb_buffer_set_language",
+    "_hb_face_create_for_tables",
+    "_hb_face_destroy",
+    "_hb_face_get_upem",
+    "_hb_face_set_upem",
+    "_hb_feature_to_string",
+    "_hb_font_create",
+    "_hb_font_destroy",
+    "_hb_font_get_glyph",
+    "_hb_font_get_glyph_extents",
+    "_hb_font_get_glyph_h_advance",
+    "_hb_font_get_glyph_h_advances",
+    "_hb_font_get_scale",
+    "_hb_language_from_string",
+    "_hb_language_to_string",
+    "_hb_ot_font_set_funcs",
+    "_hb_ot_metrics_get_position",
+    "_hb_shape_full",
+    "_hb_unicode_funcs_destroy"
+)
 
-Write-Host "`nFound $($symbols.Count) HarfBuzz symbols to wrap"
+Write-Host "Will wrap $($symbols.Count) HarfBuzz functions"
 
-if ($symbols.Count -eq 0) {
-    Write-Error "No HarfBuzz symbols found in library!"
-    Write-Host "Trying alternative pattern..."
-    # Try simpler pattern
-    $symbols = & dumpbin /SYMBOLS $LibPath | Select-String "hb_" | ForEach-Object {
-        if ($_ -match "(\w+hb_\w+)") { 
-            Write-Host "Match: $_"
-            $matches[1] 
-        }
-    } | Where-Object { $_ -and $_.StartsWith("_hb_") } | Sort-Object -Unique
-    Write-Host "Found $($symbols.Count) symbols with alternative pattern"
-}
-
-# Generate wrapper assembly file (simpler than C with jmp)
+# Generate wrapper assembly file
 $asmContent = "; Auto-generated stdcall wrappers for HarfBuzz x86`n"
 $asmContent += ".586`n.model flat, stdcall`n.code`n`n"
 
 foreach ($sym in $symbols) {
-    $funcName = $sym.Substring(1)  # Remove underscore
-    $asmContent += "PUBLIC $funcName`n"
-    $asmContent += "EXTRN ${funcName}:PROC`n"
-    $asmContent += "$funcName PROC`n"
-    $asmContent += "    jmp ${funcName}_cdecl`n"
-    $asmContent += "$funcName ENDP`n`n"
+    $funcName = $sym.Substring(1)  # Remove leading underscore: _hb_xxx -> hb_xxx
+    # Declare the cdecl version as external (it exists in libHarfBuzzSharp.lib)
+    $asmContent += "EXTERN $sym:PROC`n"
+    # Export the stdcall version with decoration
+    $asmContent += "PUBLIC $sym`n"
+    # Create wrapper that just jumps to the cdecl version
+    # Since we're in stdcall .model, this export will get stdcall decoration
+    $asmContent += "${funcName} PROC`n"
+    $asmContent += "    jmp $sym`n"
+    $asmContent += "${funcName} ENDP`n`n"
 }
 
 $asmContent += "END`n"

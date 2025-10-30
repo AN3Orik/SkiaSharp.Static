@@ -1,13 +1,31 @@
 name: Build action
 description: Build action
+inputs:
+  arch:
+    description: 'Target architecture (x64 or x86)'
+    required: true
+    default: 'x64'
 runs:
   using: "composite"
   steps:
     - name: Create Dir
       shell: nu {0}
       run: |
+        let arch = "${{ inputs.arch }}"
         mkdir skiasharp $env.BuildDir
-        mv args.gn $env.BuildDir
+        
+        # Copy appropriate args.gn based on architecture
+        if ($arch == "x86") {
+            if (("args_x86.gn" | path exists)) {
+                cp args_x86.gn $"($env.BuildDir)/args.gn"
+            } else {
+                cp args.gn $"($env.BuildDir)/args.gn"
+                # Update target_cpu for x86
+                open $"($env.BuildDir)/args.gn" | str replace 'target_cpu = "x64"' 'target_cpu = "x86"' | save $"($env.BuildDir)/args.gn"
+            }
+        } else {
+            cp args.gn $"($env.BuildDir)/args.gn"
+        }
 
     - name: Clone source
       shell: nu {0}
@@ -55,10 +73,13 @@ runs:
       working-directory: ${{github.workspace}}
       run: |
         cd skiasharp/native/windows/libHarfBuzzSharp
+        
+        let arch = "${{ inputs.arch }}"
+        let platform = if ($arch == "x86") { "Win32" } else { "x64" }
 
         let msbuild_record = {
             Configuration: "Release"
-            Platform: "x64"
+            Platform: $platform
             ConfigurationType: "StaticLibrary"
             WindowsTargetPlatformVersion: $env.UCRTVersion
             PlatformToolset: "v143"

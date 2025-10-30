@@ -5,6 +5,7 @@ on:
       - ".github/workflows/**"
       - ".github/actions/**"
       - "args.gn"
+      - "args_x86.gn"
 defaults:
   run:
     shell: nu {0}
@@ -18,10 +19,19 @@ jobs:
       id-token: write
       attestations: write
       contents: write
+    strategy:
+      matrix:
+        arch: [x64, x86]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
+        with:
+          arch: ${{ matrix.arch }}
       - name: Install LLVM 21
         run: winget install --id LLVM.LLVM --accept-package-agreements --accept-source-agreements --disable-interactivity
       - uses: ./.github/actions/build
+        with:
+          arch: ${{ matrix.arch }}
       - uses: ./.github/actions/deploy
+        with:
+          arch: ${{ matrix.arch }}

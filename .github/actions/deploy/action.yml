@@ -1,5 +1,10 @@
 name: Deploy action
 description: Deploy action
+inputs:
+  arch:
+    description: 'Target architecture (x64 or x86)'
+    required: true
+    default: 'x64'
 runs:
   using: "composite"
   steps:

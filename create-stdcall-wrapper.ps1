@@ -58,8 +58,8 @@ foreach ($sym in $symbols) {
     $funcName = $sym.Substring(1)  # Remove leading underscore: _hb_xxx -> hb_xxx
     # Declare the cdecl version as external (it exists in libHarfBuzzSharp.lib)
     $asmContent += "EXTERN $sym:PROC`n"
-    # Export the stdcall version with decoration
-    $asmContent += "PUBLIC $sym`n"
+    # Export the stdcall version (without underscore, will get @NN decoration)
+    $asmContent += "PUBLIC $funcName`n"
     # Create wrapper that just jumps to the cdecl version
     # Since we're in stdcall .model, this export will get stdcall decoration
     $asmContent += "${funcName} PROC`n"
@@ -72,15 +72,21 @@ $asmContent += "END`n"
 $asmPath = Join-Path $OutputDir "hb_stdcall_wrapper.asm"
 Set-Content -Path $asmPath -Value $asmContent -Encoding ASCII
 
+Write-Host "`nGenerated ASM file (first 20 lines):"
+Get-Content $asmPath | Select-Object -First 20 | ForEach-Object { Write-Host $_ }
+
 # Assemble with ML
 $mlPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostX86\x86\ml.exe"
 $objPath = Join-Path $OutputDir "hb_stdcall_wrapper.obj"
 
-Write-Host "Assembling wrapper..."
-& $mlPath /c /coff "/Fo$objPath" $asmPath
+Write-Host "`nAssembling wrapper..."
+$mlOutput = & $mlPath /c /coff "/Fo$objPath" $asmPath 2>&1
+$mlOutput | ForEach-Object { Write-Host $_ }
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Assembly failed"
+    Write-Host "`nFull ASM content:"
+    Get-Content $asmPath | ForEach-Object { Write-Host $_ }
+    Write-Error "Assembly failed with exit code $LASTEXITCODE"
     exit 1
 }
 

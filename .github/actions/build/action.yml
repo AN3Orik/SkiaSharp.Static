@@ -91,7 +91,9 @@ runs:
         # For x86, add /Gz flag to force __stdcall calling convention for C functions
         # This is required for compatibility with .NET Native AOT on x86
         if ($arch == "x86") {
-            msbuild -m -t:rebuild -p:($msbuild_props) -p:ClCompileAdditionalOptions="/Gz"
+            $env.CL = "/Gz"
+            msbuild -m -t:rebuild -p:($msbuild_props)
+            $env.CL = ""
         } else {
             msbuild -m -t:rebuild -p:($msbuild_props)
         }

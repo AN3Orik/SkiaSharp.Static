@@ -77,6 +77,14 @@ runs:
         let arch = "${{ inputs.arch }}"
         let platform = if ($arch == "x86") { "Win32" } else { "x64" }
 
+        # For x86, patch the vcxproj to use /Gz instead of /Gd
+        if ($arch == "x86") {
+            let vcxproj = "libHarfBuzzSharp.vcxproj"
+            open $vcxproj 
+            | str replace --all '/Gd' '/Gz' 
+            | save --force $vcxproj
+        }
+
         let msbuild_record = {
             Configuration: "Release"
             Platform: $platform
@@ -88,15 +96,7 @@ runs:
 
         let msbuild_props = $msbuild_record | items {|key, value| $"($key)=($value)" } | str join ";"
 
-        # For x86, add /Gz flag to force __stdcall calling convention for C functions
-        # This is required for compatibility with .NET Native AOT on x86
-        if ($arch == "x86") {
-            $env.CL = "/Gz"
-            msbuild -m -t:rebuild -p:($msbuild_props)
-            $env.CL = ""
-        } else {
-            msbuild -m -t:rebuild -p:($msbuild_props)
-        }
+        msbuild -m -t:rebuild -p:($msbuild_props)
 
     - name: Package libSkiaSharp
       shell: nu {0}

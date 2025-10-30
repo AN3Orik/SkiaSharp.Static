@@ -73,7 +73,7 @@ runs:
       working-directory: ${{github.workspace}}
       run: |
         cd skiasharp/native/windows/libHarfBuzzSharp
-        
+
         $arch = "${{ inputs.arch }}"
         $platform = if ($arch -eq "x86") { "Win32" } else { "x64" }
 
@@ -86,13 +86,29 @@ runs:
             "OutDir=$env:BuildDir"
         ) -join ";"
 
-        # For x86, override calling convention to stdcall
-        # We need to override /Gd (cdecl) that comes from system targets
+        # For x86, create a Directory.Build.props file to force /Gz for Release|Win32
         if ($arch -eq "x86") {
-            # Add /Gz to AdditionalOptions - it will override earlier /Gd
-            msbuild -m -t:rebuild "-p:$msbuildProps" "-p:ClCompile.AdditionalOptions=/Gz %(AdditionalOptions)"
-        } else {
-            msbuild -m -t:rebuild "-p:$msbuildProps"
+            $propsPath = Join-Path -Path (Get-Location) -ChildPath "Directory.Build.props"
+            $xml = "<Project>`n  <ItemDefinitionGroup Condition=`"'`$(Configuration)|`$(Platform)'=='Release|Win32'`">`n    <ClCompile>`n      <AdditionalOptions>/Gz %(AdditionalOptions)</AdditionalOptions>`n    </ClCompile>`n  </ItemDefinitionGroup>`n</Project>"
+            Set-Content -Path $propsPath -Value $xml -NoNewline -Encoding UTF8
+            Write-Host "Created $propsPath to force /Gz for Release|Win32"
+        }
+
+        msbuild -m -t:rebuild "-p:$msbuildProps" -v:n
+
+        # Verify the lib has stdcall symbols for x86
+        if ($arch -eq "x86") {
+            Write-Host "`n=== Verifying libHarfBuzzSharp.lib calling convention ==="
+            $libPath = Join-Path -Path $env:BuildDir -ChildPath "libHarfBuzzSharp.lib"
+            if (Test-Path $libPath) {
+                & dumpbin /SYMBOLS $libPath | Select-String "hb_blob_create" | ForEach-Object {
+                    Write-Host $_.Line
+                }
+                Write-Host "Expected: _hb_blob_create@20 (stdcall) for x86"
+                Write-Host "If you see _hb_blob_create (no @NN), then /Gz did not apply correctly"
+            } else {
+                Write-Warning "libHarfBuzzSharp.lib not found at $libPath"
+            }
         }
 
     - name: Package libSkiaSharp

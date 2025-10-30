@@ -57,7 +57,7 @@ $asmContent += ".586`n.model flat, stdcall`n.code`n`n"
 foreach ($sym in $symbols) {
     $funcName = $sym.Substring(1)  # Remove leading underscore: _hb_xxx -> hb_xxx
     # Declare the cdecl version as external (it exists in libHarfBuzzSharp.lib)
-    $asmContent += "EXTERN $sym:PROC`n"
+    $asmContent += "EXTERN ${sym}:PROC`n"
     # Export the stdcall version (without underscore, will get @NN decoration)
     $asmContent += "PUBLIC $funcName`n"
     # Create wrapper that just jumps to the cdecl version

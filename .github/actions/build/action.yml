@@ -77,18 +77,6 @@ runs:
         $arch = "${{ inputs.arch }}"
         $platform = if ($arch -eq "x86") { "Win32" } else { "x64" }
 
-        # For x86, patch all project files to use /Gz instead of /Gd
-        if ($arch -eq "x86") {
-            Get-ChildItem -Recurse -Include *.vcxproj,*.props | ForEach-Object {
-                $content = Get-Content $_.FullName -Raw
-                if ($content -match '/Gd') {
-                    $content = $content -replace '/Gd', '/Gz'
-                    Set-Content -Path $_.FullName -Value $content -NoNewline
-                    Write-Host "Patched $($_.Name) to use /Gz for x86 build"
-                }
-            }
-        }
-
         $msbuildProps = @(
             "Configuration=Release"
             "Platform=$platform"
@@ -98,7 +86,14 @@ runs:
             "OutDir=$env:BuildDir"
         ) -join ";"
 
-        msbuild -m -t:rebuild "-p:$msbuildProps"
+        # For x86, override calling convention to stdcall
+        # We need to override /Gd (cdecl) that comes from system targets
+        if ($arch -eq "x86") {
+            # Add /Gz to AdditionalOptions - it will override earlier /Gd
+            msbuild -m -t:rebuild "-p:$msbuildProps" "-p:ClCompile.AdditionalOptions=/Gz %(AdditionalOptions)"
+        } else {
+            msbuild -m -t:rebuild "-p:$msbuildProps"
+        }
 
     - name: Package libSkiaSharp
       shell: nu {0}

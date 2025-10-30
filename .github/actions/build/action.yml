@@ -77,13 +77,16 @@ runs:
         $arch = "${{ inputs.arch }}"
         $platform = if ($arch -eq "x86") { "Win32" } else { "x64" }
 
-        # For x86, patch the vcxproj to use /Gz instead of /Gd
+        # For x86, patch all project files to use /Gz instead of /Gd
         if ($arch -eq "x86") {
-            $vcxproj = "libHarfBuzzSharp.vcxproj"
-            $content = Get-Content $vcxproj -Raw
-            $content = $content -replace '/Gd', '/Gz'
-            Set-Content -Path $vcxproj -Value $content -NoNewline
-            Write-Host "Patched $vcxproj to use /Gz for x86 build"
+            Get-ChildItem -Recurse -Include *.vcxproj,*.props | ForEach-Object {
+                $content = Get-Content $_.FullName -Raw
+                if ($content -match '/Gd') {
+                    $content = $content -replace '/Gd', '/Gz'
+                    Set-Content -Path $_.FullName -Value $content -NoNewline
+                    Write-Host "Patched $($_.Name) to use /Gz for x86 build"
+                }
+            }
         }
 
         $msbuildProps = @(

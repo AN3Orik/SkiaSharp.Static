@@ -69,34 +69,33 @@ runs:
         autoninja -C $env.BuildDir skia SkiaSharp
 
     - name: Build libHarfBuzzSharp
-      shell: nu {0}
+      shell: pwsh
       working-directory: ${{github.workspace}}
       run: |
         cd skiasharp/native/windows/libHarfBuzzSharp
         
-        let arch = "${{ inputs.arch }}"
-        let platform = if ($arch == "x86") { "Win32" } else { "x64" }
+        $arch = "${{ inputs.arch }}"
+        $platform = if ($arch -eq "x86") { "Win32" } else { "x64" }
 
         # For x86, patch the vcxproj to use /Gz instead of /Gd
-        if ($arch == "x86") {
-            let vcxproj = "libHarfBuzzSharp.vcxproj"
-            open $vcxproj 
-            | str replace --all '/Gd' '/Gz' 
-            | save --force $vcxproj
+        if ($arch -eq "x86") {
+            $vcxproj = "libHarfBuzzSharp.vcxproj"
+            $content = Get-Content $vcxproj -Raw
+            $content = $content -replace '/Gd', '/Gz'
+            Set-Content -Path $vcxproj -Value $content -NoNewline
+            Write-Host "Patched $vcxproj to use /Gz for x86 build"
         }
 
-        let msbuild_record = {
-            Configuration: "Release"
-            Platform: $platform
-            ConfigurationType: "StaticLibrary"
-            WindowsTargetPlatformVersion: $env.UCRTVersion
-            PlatformToolset: "v143"
-            OutDir: $env.BuildDir
-        }
+        $msbuildProps = @(
+            "Configuration=Release"
+            "Platform=$platform"
+            "ConfigurationType=StaticLibrary"
+            "WindowsTargetPlatformVersion=$env:UCRTVersion"
+            "PlatformToolset=v143"
+            "OutDir=$env:BuildDir"
+        ) -join ";"
 
-        let msbuild_props = $msbuild_record | items {|key, value| $"($key)=($value)" } | str join ";"
-
-        msbuild -m -t:rebuild -p:($msbuild_props)
+        msbuild -m -t:rebuild "-p:$msbuildProps"
 
     - name: Package libSkiaSharp
       shell: nu {0}

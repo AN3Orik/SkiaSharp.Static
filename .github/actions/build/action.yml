@@ -86,18 +86,16 @@ runs:
             "OutDir=$env:BuildDir"
         ) -join ";"
 
-        # Build with default calling convention (cdecl)
         msbuild -m -t:rebuild "-p:$msbuildProps" -v:n
 
-        # Verify symbols
         if ($arch -eq "x86") {
-            Write-Host "`n=== libHarfBuzzSharp.lib symbols (x86) ==="
-            $libPath = Join-Path -Path $env:BuildDir -ChildPath "libHarfBuzzSharp.lib"
-            if (Test-Path $libPath) {
-                & dumpbin /SYMBOLS $libPath | Select-String "hb_blob_create" | Select-Object -First 3 | ForEach-Object {
-                    Write-Host $_.Line
-                }
-                Write-Host "Built with cdecl (should see _hb_blob_create without @NN suffix)"
+            Write-Host "`n=== Creating stdcall wrapper for x86 Native AOT ==="
+            $libPath = Join-Path $env:BuildDir "libHarfBuzzSharp.lib"
+            $wrapperLib = & "$env:GITHUB_WORKSPACE\create-stdcall-wrapper.ps1" -LibPath $libPath -OutputDir $env:BuildDir
+            if ($wrapperLib) {
+                Copy-Item -Path $wrapperLib -Destination $libPath -Force
+                Write-Host "Replaced with stdcall wrapper version"
+                & dumpbin /SYMBOLS $libPath | Select-String "hb_blob_create@" | Select-Object -First 2
             }
         }
 

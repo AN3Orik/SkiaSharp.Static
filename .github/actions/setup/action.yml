@@ -32,3 +32,13 @@ runs:
             $"BuildDir=($env.GITHUB_WORKSPACE)/out/windows/($arch)"
             $"TargetArch=($arch)"
         ] | str join (char newline) | save --append $env.GITHUB_ENV
+        
+        # Set additional environment variables for native compilation
+        if ($arch == "x86") {
+            [
+                "CC_target=clang-cl"
+                "CXX_target=clang-cl" 
+                "AR_target=llvm-lib"
+                "target_cpu=x86"
+            ] | str join (char newline) | save --append $env.GITHUB_ENV
+        }

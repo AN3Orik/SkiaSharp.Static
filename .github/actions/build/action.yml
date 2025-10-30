@@ -77,10 +77,6 @@ runs:
         let arch = "${{ inputs.arch }}"
         let platform = if ($arch == "x86") { "Win32" } else { "x64" }
 
-        # For x86, use /Gz flag to force __stdcall calling convention for C functions
-        # This is required for compatibility with .NET Native AOT on x86
-        let additional_flags = if ($arch == "x86") { "/Gz" } else { "" }
-
         let msbuild_record = {
             Configuration: "Release"
             Platform: $platform
@@ -88,12 +84,17 @@ runs:
             WindowsTargetPlatformVersion: $env.UCRTVersion
             PlatformToolset: "v143"
             OutDir: $env.BuildDir
-            AdditionalOptions: $additional_flags
         }
 
         let msbuild_props = $msbuild_record | items {|key, value| $"($key)=($value)" } | str join ";"
 
-        msbuild -m -t:rebuild -p:($msbuild_props)
+        # For x86, add /Gz flag to force __stdcall calling convention for C functions
+        # This is required for compatibility with .NET Native AOT on x86
+        if ($arch == "x86") {
+            msbuild -m -t:rebuild -p:($msbuild_props) -p:ClCompileAdditionalOptions="/Gz"
+        } else {
+            msbuild -m -t:rebuild -p:($msbuild_props)
+        }
 
     - name: Package libSkiaSharp
       shell: nu {0}

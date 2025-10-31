@@ -71,22 +71,29 @@ foreach ($entry in $functionSizes.GetEnumerator()) {
     $numParams = $sizeBytes / 4  # Each DWORD = 4 bytes on x86
     
     # Build parameter list for PROTO (:DWORD for each parameter)
-    $params = if ($numParams -gt 0) {
+    $protoParams = if ($numParams -gt 0) {
         (1..$numParams | ForEach-Object { ":DWORD" }) -join ", "
     } else {
         ""
     }
     
+    # Build parameter list for PROC (needs names: p1:DWORD, p2:DWORD, etc.)
+    $procParams = if ($numParams -gt 0) {
+        (1..$numParams | ForEach-Object { "p${_}:DWORD" }) -join ", "
+    } else {
+        ""
+    }
+    
     # Declare the function prototype so MASM knows how to decorate it
-    if ($params) {
-        $asmContent += "${funcName} PROTO STDCALL $params`n"
+    if ($protoParams) {
+        $asmContent += "${funcName} PROTO STDCALL $protoParams`n"
     } else {
         $asmContent += "${funcName} PROTO STDCALL`n"
     }
     
     # Create the wrapper procedure
-    if ($params) {
-        $asmContent += "${funcName} PROC STDCALL $params`n"
+    if ($procParams) {
+        $asmContent += "${funcName} PROC STDCALL $procParams`n"
     } else {
         $asmContent += "${funcName} PROC STDCALL`n"
     }

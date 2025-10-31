@@ -52,7 +52,9 @@ Write-Host "Will wrap $($symbols.Count) HarfBuzz functions"
 
 # Generate wrapper assembly file
 $asmContent = "; Auto-generated stdcall wrappers for HarfBuzz x86`n"
-$asmContent += ".586`n.model flat, stdcall`n.code`n`n"
+$asmContent += ".586`n.model flat, stdcall`n"
+$asmContent += "ASSUME fs:nothing`n"
+$asmContent += ".code`n`n"
 
 foreach ($sym in $symbols) {
     $funcName = $sym.Substring(1)  # Remove leading underscore: _hb_xxx -> hb_xxx
@@ -64,7 +66,9 @@ foreach ($sym in $symbols) {
     # Since we're in stdcall .model, this export will get stdcall decoration
     $asmContent += "${funcName} PROC`n"
     $asmContent += "    jmp $sym`n"
-    $asmContent += "${funcName} ENDP`n`n"
+    $asmContent += "${funcName} ENDP`n"
+    # Register as safe for SEH (no exception handlers in this simple wrapper)
+    $asmContent += ".safeseh $funcName`n`n"
 }
 
 $asmContent += "END`n"
@@ -80,7 +84,7 @@ $mlPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSV
 $objPath = Join-Path $OutputDir "hb_stdcall_wrapper.obj"
 
 Write-Host "`nAssembling wrapper..."
-$mlOutput = & $mlPath /c /coff "/Fo$objPath" $asmPath 2>&1
+$mlOutput = & $mlPath /c /coff /safeseh "/Fo$objPath" $asmPath 2>&1
 $mlOutput | ForEach-Object { Write-Host $_ }
 
 if ($LASTEXITCODE -ne 0) {

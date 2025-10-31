@@ -9,65 +9,85 @@ param(
 Write-Host "Creating stdcall wrapper for $LibPath"
 
 # For LTCG libs, symbols aren't readable via /SYMBOLS
-# Instead, list all hb_* functions we need based on error list from Native AOT
+# Map of function names to their stdcall parameter sizes (in bytes)
+# Extracted from Native AOT link errors showing required stdcall decorations
 Write-Host "Using predefined HarfBuzz function list for x86 Native AOT"
 
-$symbols = @(
-    "_hb_blob_create",
-    "_hb_blob_destroy",
-    "_hb_buffer_add_utf16",
-    "_hb_buffer_create",
-    "_hb_buffer_destroy",
-    "_hb_buffer_get_content_type",
-    "_hb_buffer_get_direction",
-    "_hb_buffer_get_glyph_infos",
-    "_hb_buffer_get_glyph_positions",
-    "_hb_buffer_get_length",
-    "_hb_buffer_guess_segment_properties",
-    "_hb_buffer_reset",
-    "_hb_buffer_reverse",
-    "_hb_buffer_set_direction",
-    "_hb_buffer_set_language",
-    "_hb_face_create_for_tables",
-    "_hb_face_destroy",
-    "_hb_face_get_upem",
-    "_hb_face_set_upem",
-    "_hb_feature_to_string",
-    "_hb_font_create",
-    "_hb_font_destroy",
-    "_hb_font_get_glyph",
-    "_hb_font_get_glyph_extents",
-    "_hb_font_get_glyph_h_advance",
-    "_hb_font_get_glyph_h_advances",
-    "_hb_font_get_scale",
-    "_hb_language_from_string",
-    "_hb_language_to_string",
-    "_hb_ot_font_set_funcs",
-    "_hb_ot_metrics_get_position",
-    "_hb_shape_full",
-    "_hb_unicode_funcs_destroy"
-)
+$functionSizes = @{
+    "_hb_blob_create" = 20
+    "_hb_blob_destroy" = 4
+    "_hb_buffer_add_utf16" = 20
+    "_hb_buffer_create" = 0
+    "_hb_buffer_destroy" = 4
+    "_hb_buffer_get_content_type" = 4
+    "_hb_buffer_get_direction" = 4
+    "_hb_buffer_get_glyph_infos" = 8
+    "_hb_buffer_get_glyph_positions" = 8
+    "_hb_buffer_get_length" = 4
+    "_hb_buffer_guess_segment_properties" = 4
+    "_hb_buffer_reset" = 4
+    "_hb_buffer_reverse" = 4
+    "_hb_buffer_set_direction" = 8
+    "_hb_buffer_set_language" = 8
+    "_hb_face_create_for_tables" = 12
+    "_hb_face_destroy" = 4
+    "_hb_face_get_upem" = 4
+    "_hb_face_set_upem" = 8
+    "_hb_feature_to_string" = 16
+    "_hb_font_create" = 4
+    "_hb_font_destroy" = 4
+    "_hb_font_get_glyph" = 16
+    "_hb_font_get_glyph_extents" = 12
+    "_hb_font_get_glyph_h_advance" = 8
+    "_hb_font_get_glyph_h_advances" = 20
+    "_hb_font_get_scale" = 12
+    "_hb_language_from_string" = 8
+    "_hb_language_to_string" = 4
+    "_hb_ot_font_set_funcs" = 4
+    "_hb_ot_metrics_get_position" = 12
+    "_hb_shape_full" = 20
+    "_hb_unicode_funcs_destroy" = 4
+}
 
-Write-Host "Will wrap $($symbols.Count) HarfBuzz functions"
+Write-Host "Will wrap $($functionSizes.Count) HarfBuzz functions"
 
 # Generate wrapper assembly file
 $asmContent = "; Auto-generated stdcall wrappers for HarfBuzz x86`n"
 $asmContent += ".586`n.model flat, stdcall`n"
-$asmContent += "ASSUME fs:nothing`n"
-$asmContent += ".code`n`n"
+$asmContent += "ASSUME fs:nothing`n`n"
 
-foreach ($sym in $symbols) {
-    $funcName = $sym.Substring(1)  # Remove leading underscore: _hb_xxx -> hb_xxx
-    # Declare the cdecl version as external (it exists in libHarfBuzzSharp.lib)
+# First declare all external cdecl functions
+foreach ($sym in $functionSizes.Keys) {
     $asmContent += "EXTERN ${sym}:PROC`n"
-    # Export the stdcall version (without underscore, will get @NN decoration)
-    $asmContent += "PUBLIC $funcName`n"
-    # Create wrapper that just jumps to the cdecl version
-    # Since we're in stdcall .model, this export will get stdcall decoration
-    $asmContent += "${funcName} PROC`n"
+}
+
+$asmContent += "`n.code`n`n"
+
+# Then create stdcall wrappers with proper parameter counts
+foreach ($entry in $functionSizes.GetEnumerator()) {
+    $sym = $entry.Key
+    $sizeBytes = $entry.Value
+    $funcName = $sym.Substring(1)  # Remove leading underscore: _hb_xxx -> hb_xxx
+    $numParams = $sizeBytes / 4  # Each DWORD = 4 bytes on x86
+    
+    # Build parameter list for PROTO (:DWORD for each parameter)
+    $params = if ($numParams -gt 0) {
+        (1..$numParams | ForEach-Object { ":DWORD" }) -join ", "
+    } else {
+        ""
+    }
+    
+    # Declare the function prototype so MASM knows how to decorate it
+    $asmContent += "${funcName} PROTO STDCALL $params`n"
+    
+    # Create the wrapper procedure
+    $asmContent += "${funcName} PROC STDCALL"
+    if ($params) { $asmContent += " $params" }
+    $asmContent += "`n"
     $asmContent += "    jmp $sym`n"
     $asmContent += "${funcName} ENDP`n"
-    # Register as safe for SEH (no exception handlers in this simple wrapper)
+    
+    # Register as safe for SEH
     $asmContent += ".safeseh $funcName`n`n"
 }
 

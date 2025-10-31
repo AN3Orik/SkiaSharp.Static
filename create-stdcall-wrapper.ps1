@@ -54,12 +54,12 @@ Write-Host "Will wrap $($functionSizes.Count) HarfBuzz functions"
 # Generate wrapper assembly file
 $asmContent = "; Auto-generated stdcall wrappers for HarfBuzz x86`n"
 $asmContent += ".586`n.model flat`n"
-$asmContent += "OPTION DOTNAME`n"  # Prevent name decoration
+$asmContent += "OPTION LANGUAGE:C`n"  # Use C language conventions (no leading underscore added)
 $asmContent += "ASSUME fs:nothing`n`n"
 
 # First declare all external cdecl functions
 foreach ($sym in $functionSizes.Keys) {
-    $asmContent += "EXTERN C ${sym}:PROC`n"
+    $asmContent += "EXTERN ${sym}:PROC`n"
 }
 
 $asmContent += "`n.code`n`n"

@@ -78,12 +78,18 @@ foreach ($entry in $functionSizes.GetEnumerator()) {
     }
     
     # Declare the function prototype so MASM knows how to decorate it
-    $asmContent += "${funcName} PROTO STDCALL $params`n"
+    if ($params) {
+        $asmContent += "${funcName} PROTO STDCALL $params`n"
+    } else {
+        $asmContent += "${funcName} PROTO STDCALL`n"
+    }
     
     # Create the wrapper procedure
-    $asmContent += "${funcName} PROC STDCALL"
-    if ($params) { $asmContent += " $params" }
-    $asmContent += "`n"
+    if ($params) {
+        $asmContent += "${funcName} PROC STDCALL $params`n"
+    } else {
+        $asmContent += "${funcName} PROC STDCALL`n"
+    }
     $asmContent += "    jmp $sym`n"
     $asmContent += "${funcName} ENDP`n"
     
